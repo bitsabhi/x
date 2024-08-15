@@ -10,11 +10,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/jinzhu/gorm"
+	"gorm.io/gorm"
 	"newsapp/models"
 )
-
-var huggingFaceAPIKey = os.Getenv("HUGGINGFACE_API_KEY")
 
 type HuggingFaceRequest struct {
 	Inputs string `json:"inputs"`
@@ -24,8 +22,9 @@ type HuggingFaceResponse struct {
 	SummaryText string `json:"summary_text"`
 }
 
-// GenerateSummaryHuggingFace calls the Hugging Face API to generate a summary of the given article content
+// Updated GenerateSummaryHuggingFace to handle array responses
 func GenerateSummaryHuggingFace(articleContent string) (string, error) {
+	huggingFaceAPIKey := os.Getenv("HUGGINGFACE_API_KEY")
 	if huggingFaceAPIKey == "" {
 		log.Println("Hugging Face API key is not set")
 		return "", fmt.Errorf("Hugging Face API key is not set")
@@ -67,54 +66,25 @@ func GenerateSummaryHuggingFace(articleContent string) (string, error) {
 
 	log.Printf("Hugging Face API response: %s", body)
 
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status code: %d, response body: %s", resp.StatusCode, string(body))
-	}
-
-	var result struct {
-		SummaryText string `json:"summary_text"`
-	}
-
-	err = json.Unmarshal(body, &result)
-	if err != nil {
+	// Handle array response
+	var result []HuggingFaceResponse
+	if err := json.Unmarshal(body, &result); err != nil {
 		return "", fmt.Errorf("failed to unmarshal response: %v", err)
 	}
 
-	if result.SummaryText == "" {
-		return "", fmt.Errorf("no summary returned by Hugging Face")
+	// Return the first summary text in the array
+	if len(result) > 0 {
+		return result[0].SummaryText, nil
 	}
 
-	return result.SummaryText, nil
+	return "", fmt.Errorf("no summary text found in the response")
 }
 
-// GeneratePersonalizedNewsHuggingFace generates personalized news based on user preferences and interactions
-func GeneratePersonalizedNewsHuggingFace(db *gorm.DB, userID string, categories []string, interactions []models.UserInteraction) []models.News {
-	var news []models.News
-
-	db.Where("category IN (?)", categories).Find(&news)
-
-	for i := range news {
-		summary, err := GenerateSummaryHuggingFace(news[i].Content)
-		if err != nil {
-			log.Printf("Error summarizing article '%s': %v", news[i].Title, err)
-			continue
-		}
-		news[i].Content = summary
-	}
-
-	return news
-}
-
-// FetchAndStoreNewsHuggingFace fetches news articles, summarizes them using Hugging Face, and stores them in the database
+// FetchAndStoreNewsHuggingFace with better handling of missing fields and API response
 func FetchAndStoreNewsHuggingFace(db *gorm.DB) {
-	if db == nil {
-		log.Fatalf("Database connection is nil")
-		return
-	}
-
 	newsAPIKey := os.Getenv("NEWSAPI_KEY")
 	if newsAPIKey == "" {
-		log.Fatalf("News API key is not set")
+		log.Println("News API key is not set")
 		return
 	}
 
@@ -159,14 +129,20 @@ func FetchAndStoreNewsHuggingFace(db *gorm.DB) {
 			continue
 		}
 
-		title, _ := articleMap["title"].(string)
-		description, _ := articleMap["description"].(string)
+		title, titleOk := articleMap["title"].(string)
+		description, descOk := articleMap["description"].(string)
 		source, _ := articleMap["source"].(map[string]interface{})
-		sourceName, _ := source["name"].(string)
-		url, _ := articleMap["url"].(string)
+		sourceName, sourceNameOk := source["name"].(string)
+		url, urlOk := articleMap["url"].(string)
 
-		if title == "" || description == "" || sourceName == "" || url == "" {
-			log.Printf("Error: article fields missing, skipping article")
+		// Provide default value if description is missing
+		if !descOk || description == "" {
+			description = "No description available."
+		}
+
+		// Skip the article if the most critical fields are missing
+		if !titleOk || !urlOk || !sourceNameOk {
+			log.Printf("Error: essential article fields missing, skipping article")
 			continue
 		}
 
@@ -178,6 +154,7 @@ func FetchAndStoreNewsHuggingFace(db *gorm.DB) {
 			URL:      url,
 		}
 
+		// Generate summary using Hugging Face
 		summary, err := GenerateSummaryHuggingFace(news.Content)
 		if err != nil {
 			log.Printf("Error summarizing article '%s': %v", news.Title, err)
@@ -185,8 +162,28 @@ func FetchAndStoreNewsHuggingFace(db *gorm.DB) {
 		}
 		news.Content = summary
 
+		// Attempt to insert the news article into the database
 		if err := db.Create(&news).Error; err != nil {
 			log.Printf("Error storing news article: %v", err)
+		} else {
+			log.Printf("Successfully stored article: %s", news.Title)
 		}
 	}
+}
+
+func GeneratePersonalizedNewsHuggingFace(db *gorm.DB, userID string, categories []string, interactions []models.UserInteraction) []models.News {
+	var news []models.News
+
+	db.Where("category IN (?)", categories).Find(&news)
+
+	for i := range news {
+		summary, err := GenerateSummaryHuggingFace(news[i].Content)
+		if err != nil {
+			log.Printf("Error summarizing article '%s': %v", news[i].Title, err)
+			continue
+		}
+		news[i].Content = summary
+	}
+
+	return news
 }

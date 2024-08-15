@@ -7,12 +7,13 @@ import (
 	"net/http"
 	"newsapp/controllers"
 	"newsapp/middleware"
+	"newsapp/models"
 	"newsapp/services"
 	"os"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/sqlite"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func init() {
@@ -36,14 +37,17 @@ func FetchNewsHandler(c *gin.Context) {
 }
 
 func main() {
+	// todo: gin.SetMode(gin.ReleaseMode)  // Set Gin to release mode for production
 
-	//todo: gin.SetMode(gin.ReleaseMode)  // Set Gin to release mode for production
 	var err error
-	db, err = gorm.Open("sqlite3", "test.db")
+	// Open a connection to the SQLite database using the newer GORM package
+	db, err = gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect database: %v", err)
 	}
-	defer db.Close()
+
+	// Migrate the schema (create the necessary tables)
+	autoMigrateTables()
 
 	// Fetch and store news articles at startup
 	services.FetchAndStoreNewsHuggingFace(db)
@@ -78,4 +82,12 @@ func main() {
 
 	fmt.Println("Server running at http://localhost:8080")
 	r.Run(":8080")
+}
+
+func autoMigrateTables() {
+	// todo
+	db.AutoMigrate(&models.News{})            // Add other models here
+	db.AutoMigrate(&models.User{})            // Example: User model
+	db.AutoMigrate(&models.UserPreference{})  // Example: Preference model
+	db.AutoMigrate(&models.UserInteraction{}) // Example: Interaction model
 }
