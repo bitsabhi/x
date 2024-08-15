@@ -1,0 +1,69 @@
+# Binaries for programs and plugins
+*.exe
+*.dll
+*.so
+*.dylib
+.DS_Store
+
+# Binaries
+main
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Directories to ignore
+vendor/
+bin/
+pkg/
+
+# Dependency directories
+/.idea/
+/.vscode/
+/node_modules/
+
+# Environment variables file (if you use one for local development)
+.env
+
+# Database files
+*.db
+*.sqlite
+
+# Compiled Object files
+*.o
+
+# GoLand project files
+.idea/
+
+# Docker files
+Dockerfile
+
+# Build directories
+/build/
+dist/
+
+# AWS credentials and config (make sure this is correctly set up in your environment)
+.aws/
+
+# Secrets
+secrets.yml
+*.key
+*.pem
+*.crt
+#############
+_prv/
+_todo/
+_alternatives/
+_dotMDfiles/
+
+docker-compose.yml
+Dockerfile
+services/openai.go
+integration_test.go
+
