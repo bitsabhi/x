@@ -55,8 +55,7 @@ func main() {
 	// Initialize Gin router for handling HTTP requests
 	r := gin.Default()
 
-	// Apply middleware for JWT authentication and rate limiting
-	r.Use(middleware.JWTAuthMiddleware())
+	// Apply middleware for rate limiting
 	r.Use(middleware.RateLimitMiddleware())
 
 	// Enable CloudWatch for logging in production environment

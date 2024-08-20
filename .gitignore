@@ -64,6 +64,5 @@ _dotMDfiles/
 
 docker-compose.yml
 Dockerfile
-services/openai.go
 integration_test.go
 

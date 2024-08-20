@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	"errors"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"net/http"
@@ -17,7 +17,7 @@ func RegisterUser(c *gin.Context, db *gorm.DB) {
 		return
 	}
 
-	// Hash the password securely before storing in the database
+	// Hash the password before storing
 	hashedPassword, err := common.HashPassword(user.Password)
 	if err != nil {
 		common.HandleError(c, err, http.StatusInternalServerError)
@@ -44,12 +44,12 @@ func Login(c *gin.Context, db *gorm.DB) {
 	}
 
 	if !common.CheckPasswordHash(requestUser.Password, user.Password) {
-		err := errors.New("invalid password")
+		err := fmt.Errorf("invalid password")
 		common.HandleError(c, err, http.StatusUnauthorized)
 		return
 	}
 
-	// Create and sign JWT token for authenticated user
+	// Generate JWT token
 	token, err := common.GenerateJWT(user)
 	if err != nil {
 		common.HandleError(c, err, http.StatusInternalServerError)
@@ -93,7 +93,7 @@ func GetPersonalizedNews(c *gin.Context, db *gorm.DB) {
 		prefCategories = append(prefCategories, pref.Category)
 	}
 
-	// Fetch and generate personalized news summaries for the user
+	// Generate personalized news
 	news = services.GeneratePersonalizedNewsHuggingFace(db, userID, prefCategories, interactions)
 
 	c.JSON(http.StatusOK, news)

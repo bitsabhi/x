@@ -80,15 +80,15 @@ func GenerateSummaryHuggingFace(articleContent string) (string, error) {
 	return "", fmt.Errorf("no summary text found in the response")
 }
 
-// FetchAndStoreNewsHuggingFace with better handling of missing fields and API response
+// FetchAndStoreNewsHuggingFace with The Guardian API
 func FetchAndStoreNewsHuggingFace(db *gorm.DB) {
-	newsAPIKey := os.Getenv("NEWSAPI_KEY")
-	if newsAPIKey == "" {
-		log.Println("News API key is not set")
+	guardianAPIKey := os.Getenv("GUARDIAN_API_KEY")
+	if guardianAPIKey == "" {
+		log.Println("The Guardian API key is not set")
 		return
 	}
 
-	url := fmt.Sprintf("https://newsapi.org/v2/top-headlines?country=us&category=business&apiKey=%s", newsAPIKey)
+	url := fmt.Sprintf("https://content.guardianapis.com/search?section=business&show-fields=bodyText,headline&api-key=%s", guardianAPIKey)
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Fatalf("Error fetching news: %v", err)
@@ -116,39 +116,45 @@ func FetchAndStoreNewsHuggingFace(db *gorm.DB) {
 		return
 	}
 
-	articles, ok := result["articles"].([]interface{})
+	response, ok := result["response"].(map[string]interface{})
 	if !ok {
-		log.Fatalf("Error: articles field is not of the expected type, actual type: %T", result["articles"])
+		log.Fatalf("Error: response field is not of the expected type, actual type: %T", result["response"])
 		return
 	}
 
-	for _, article := range articles {
+	results, ok := response["results"].([]interface{})
+	if !ok {
+		log.Fatalf("Error: results field is not of the expected type, actual type: %T", response["results"])
+		return
+	}
+
+	for _, article := range results {
 		articleMap, ok := article.(map[string]interface{})
 		if !ok {
 			log.Printf("Error: article is not of the expected type")
 			continue
 		}
 
-		title, titleOk := articleMap["title"].(string)
-		description, descOk := articleMap["description"].(string)
-		source, _ := articleMap["source"].(map[string]interface{})
-		sourceName, sourceNameOk := source["name"].(string)
-		url, urlOk := articleMap["url"].(string)
-
-		// Provide default value if description is missing
-		if !descOk || description == "" {
-			description = "No description available."
+		fields, fieldsOk := articleMap["fields"].(map[string]interface{})
+		if !fieldsOk {
+			log.Printf("Error: fields are missing or not of the expected type, skipping article")
+			continue
 		}
 
+		title, titleOk := fields["headline"].(string)
+		articleContent, contentOk := fields["bodyText"].(string)
+		url, urlOk := articleMap["webUrl"].(string)
+		sourceName := "The Guardian"
+
 		// Skip the article if the most critical fields are missing
-		if !titleOk || !urlOk || !sourceNameOk {
+		if !titleOk || !urlOk || !contentOk {
 			log.Printf("Error: essential article fields missing, skipping article")
 			continue
 		}
 
 		news := models.News{
 			Title:    title,
-			Content:  description,
+			Content:  articleContent,
 			Category: "business",
 			Source:   sourceName,
 			URL:      url,
